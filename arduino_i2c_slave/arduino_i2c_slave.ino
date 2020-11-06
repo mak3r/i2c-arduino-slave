@@ -66,7 +66,7 @@
 #define REGISTERS_DEFAULT_VAL 0x00
 
 //Default bit mask of the control register
-#define CONTROL_DEFAULT_VAL (EEPROM_UNUSED & EEPROM_RESET_ALL)
+#define CONTROL_DEFAULT_VAL (EEPROM_READ & EEPROM_LOAD_TO_LOCAL)
 
 static const int NUM_REGISTERS=256;
 int reg = 0;
@@ -104,6 +104,7 @@ void loop() {
 } // end loop
 
 void resetControls() {
+  EEPROM.write(CONTROL_REG, CONTROL_DEFAULT_VAL);
   EEPROM.write(I2C_ADDR_REG, I2C_SLAVE_ADDRESS); 
   EEPROM.write(DEFAULT_VAL_REG, REGISTERS_DEFAULT_VAL);
 }
