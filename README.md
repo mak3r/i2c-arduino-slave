@@ -7,7 +7,7 @@ This project uses an in memory array as the I2C registers. The in-memory array s
 ```
  0x00 - EEPROM Control Register
     - Controls the reading and writing to EEPROM via I2C
-    - Default 0x80
+    - Default 0x0A
     Mask values 
     - 0x01 Store all received values in EEPROM registers 
         - if this bit is not set, values are stored in local memory
