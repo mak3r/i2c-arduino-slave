@@ -4,6 +4,9 @@ An I2C slave project built on wire.h. Designed to easily drop into a variety of 
 This project uses an in memory array as the I2C registers. The in-memory array solution is obviously volatile and unsustainable across device restarts. To mitigate this, it is possible to write the contents of the in-memory array to the device EEPROM. Of course EEPROM on Arduino devices is said to have a lifetime of about 100K writes so it is not ideal as the permanent read/write registers for many applications. The following section detailing the *I2C Slave Configuration Registers* provides capabilities to change the mode to use EEPROM storage as the default, or to read from EEPROM if one were to preset the instructions necessary for a variety of applications. Please read that section for more details and look a the examples section for some ideas about how it might be used in practice.
 
 ## I2C Slave Configuration Registers
+* Registers 0x00, 0x01 and 0x02 are reserved for device management
+* Registers 0x03 - 0xFF are available for program control
+
 ```
  0x00 - EEPROM Control Register
     - Controls the reading and writing to EEPROM via I2C
@@ -38,7 +41,7 @@ This project uses an in memory array as the I2C registers. The in-memory array s
 
 ## Known challenges with I2C
 * Master / Slave voltages matter
-* In order for devices with RTC to do I2C, they must use a software methodology called *clock pulse stretching*
+* In order for devices without RTC to do I2C, they must use a software methodology called *clock pulse stretching*
     * sometimes this results in cycle delays an the appearance of lost bits
     * this seems to be able to be mitigaged in code by adding a slight delay at certain points
         `delayMicroseconds(20);` 
