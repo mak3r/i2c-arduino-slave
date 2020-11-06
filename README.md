@@ -38,7 +38,7 @@ This project uses an in memory array as the I2C registers. The in-memory array s
 
 ## Known challenges with I2C
 * Master / Slave voltages matter
-* In order for devices with RTC to do I2C, they must use a software methodology called ~clock pulse stretching~
+* In order for devices with RTC to do I2C, they must use a software methodology called *clock pulse stretching*
     * sometimes this results in cycle delays an the appearance of lost bits
     * this seems to be able to be mitigaged in code by adding a slight delay at certain points
         `delayMicroseconds(20);` 
