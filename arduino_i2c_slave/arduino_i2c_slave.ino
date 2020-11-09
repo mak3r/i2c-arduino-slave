@@ -7,20 +7,18 @@
 /*
  0x00 - EEPROM Control Register
     - Controls the reading and writing to EEPROM via I2C
-    - Default 0x80
+    - Default 0x02
     Mask values 
-    - 0x01 Store all received values in EEPROM registers 
+    - 0x01 Load slave address from register (control register + 0x01) - only on power recycle
+    - 0x02 Load EEPROM to local memory
+    - 0x04 Store all received values into EEPROM registers 
         - if this bit is not set, values are stored in local memory
-    - 0x02 Always read registers from EEPROM
+    - 0x08 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
-    - 0x04 Reset all registers except the control register to default values 
-    - 0x08 Load EEPROM to local memory
-    - 0x10 Load local memory into EEPROM - including control register 0x00
-    - 0x20 Reset all registers including the control register to defaults 
-        - If this is set than all other bits in this register will also be reset
-        - regardless of their current value
-    - 0x40 Load slave address from register 0x01 - only on power recycle
-    - 0x80 UNUSED
+    - 0x10 Reset all registers except the control register to default values 
+    - 0x20 Reset control register to default value 
+    - 0x40 Load local memory into EEPROM - including control register 0x00
+    - 0x80 Developer use - force device reset 
 
  0x01 - Slave address
     - The slave address is set to 0x08 programmatically
@@ -29,7 +27,13 @@
  0x02 - Default value for program control registers
     - 0x00
      
- 0x03-0xFF Program Control
+ 0x03 - Program control offset. 
+	- This can be used to extend where the program is stored
+	- This can only work if if the device has more EEPROM available. It's not magic
+	- The default offset is this register+1
+	- CURRENTLY UNIMPLEMENTED
+ 
+ 0x04-0xFF Program Control
     - use as needed based on I2C communication via the device
 
 
@@ -52,13 +56,13 @@
 #define PC_START_REG      0x03
 
 //Control Register Bit Masks
-#define EEPROM_STORE            0x01
-#define EEPROM_READ             0x02
-#define EEPROM_RESET_PC         0x04
-#define EEPROM_LOAD_TO_LOCAL    0x08
-#define EEPROM_LOAD_FROM_LOCAL  0x10
+#define EEPR0M_SLAVE_ALT        0x01
+#define EEPROM_LOAD_TO_LOCAL    0x02
+#define EEPROM_STORE            0x04
+#define EEPROM_READ             0x08
+#define EEPROM_RESET_PC         0x10
 #define EEPROM_RESET_ALL        0x20
-#define EEPR0M_SLAVE_ALT        0x40
+#define EEPROM_LOAD_FROM_LOCAL  0x40
 #define EEPROM_UNUSED           0x80 
 
 
@@ -66,7 +70,7 @@
 #define REGISTERS_DEFAULT_VAL 0x00
 
 //Default bit mask of the control register
-#define CONTROL_DEFAULT_VAL (EEPROM_READ & EEPROM_LOAD_TO_LOCAL)
+#define CONTROL_DEFAULT_VAL EEPROM_LOAD_TO_LOCAL
 
 static const int NUM_REGISTERS=256;
 int reg = 0;
@@ -171,6 +175,13 @@ void receiveData(int len){
       rx++;
     }
   }
+}
+
+void safeWriteEEPROM(byte reg, byte val) {
+	//Only write to EEPROM if the value is not the same as the existing value
+	if ( ! EEPROM.read(reg) & val ) {
+		EEPROM.write(rx, regbuffer[rx]);
+	}
 }
 
 void sendData(){
