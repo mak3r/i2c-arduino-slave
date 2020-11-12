@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo 
 
 i2cset -y 1 0x08 0x01 0x33 #set the slave address to 0x33
 i2cset -y 1 0x08 0x00 0x81 #set the control register to use the new slave address and reset the device 
