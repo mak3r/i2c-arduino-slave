@@ -9,10 +9,10 @@
     - Controls the reading and writing to EEPROM via I2C
     - Default 0x02
     Mask values 
-    - 0x01 NOACTION 
-		- don't make any changes based on the incoming mask bits
-		- store the incoming mask according to the current read location
-		- this bit will always be 0 in the saved register 
+    - 0x01 WRITE_REG_UPDATE 
+      - Instead of overwriting the control register,
+  		- Combine the incoming bits with the current value of the control register
+		  - this bit will always be 0 in the saved register 
     - 0x02 Load slave address from register (control register + 0x01) - only on power recycle
     - 0x04 Load EEPROM to local memory
     - 0x08 Store all received values into EEPROM registers 
@@ -20,11 +20,11 @@
     - 0x10 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
     - 0x20 Reset all registers including the control register to default values
-		- this bit will always be 0 in the saved register
+		  - this bit will always be 0 in the saved register
     - 0x40 Load local memory into EEPROM - including control register 0x00 
-		- this bit will always be 0 in the saved register
+		  - this bit will always be 0 in the saved register
     - 0x80 Force device reset 
-		- this bit will always be 0 in the saved register
+		  - this bit will always be 0 in the saved register
 
  0x01 - Slave address
     - The slave address is set to 0x08 programmatically
@@ -62,7 +62,7 @@
 #define PC_START_REG      0x04 // Default program control start index
 
 //Control Register Bit Masks
-#define NOACTION                0x01
+#define WRITE_REG_UPDATE        0x01
 #define I2C_SLAVE_ALT           0x02
 #define LOAD_EEPROM_TO_LOCAL    0x04
 #define WRITE_TO_EEPROM         0x08
@@ -129,6 +129,7 @@ void controlUpdated(byte cr) {
   byte perma_mask = B00011110; // only the respected bits should be stored
                                // AND this with the cntrl_reg_val
   bool reset_ready = false;
+  bool update_write_reg = false;
   //Serial.print("cntrl_reg_val: ");      
   //Serial.println(cntrl_reg_val, BIN);        
 
@@ -145,25 +146,23 @@ void controlUpdated(byte cr) {
     switch (cur_control) {
       case 0x00:
       {
-        //Serial.println("Case 0");        
+        //Serial.println("Case 0");
         break;
       }
-      case NOACTION:
+      case WRITE_REG_UPDATE:
       {
-        //Register is properly stored on exit
-        // Ignore all other operations
-        control_mask = 0x00; //force exit by tripping the while condition
+        update_write_reg = true;
         break;
       }
       case I2C_SLAVE_ALT: 
       {
-        //Serial.println("Case I2C_SLAVE_ALT");    
-        use_slave_alt = true;    
+        //Serial.println("Case I2C_SLAVE_ALT");
+        use_slave_alt = true;
         break;
       }
       case LOAD_EEPROM_TO_LOCAL: 
       {
-        //Serial.println("Case LOAD_EEPROM_TO_LOCAL");        
+        //Serial.println("Case LOAD_EEPROM_TO_LOCAL");
         //copy EEPROM data to local registers
         for (int i = 0; i < NUM_REGISTERS; i++) {
           regbuffer[i] = EEPROM.read(i);
@@ -220,6 +219,11 @@ void controlUpdated(byte cr) {
   //store the respected bits of the control register value
   //Serial.print("control_updated :");
   //Serial.println(cntrl_reg_val & perma_mask, BIN);
+  if (update_write_reg) {
+    // combine the incoming bits with the appropriate control register value
+    cntrl_reg_val = cntrl_reg_val | readData(CONTROL_REG, write_eeprom);
+  }
+  // Store the final control register value
   storeData(CONTROL_REG, cntrl_reg_val & perma_mask);
   if (reset_ready)
     digitalWrite(reset_pin, LOW);
@@ -263,15 +267,21 @@ void safeWriteEEPROM(byte reg, byte content) {
   EEPROM.update(reg, content);
 }
 
-void sendData(){
-  int p = reg % sizeof(regbuffer); 
+byte readData(int p, bool from_eeprom) {
   byte c;
-  delayMicroseconds(20);
-  if (read_eeprom) {
+  if (from_eeprom) {
     c = EEPROM.read(p);   // read from eeprom
   } else {
     c = regbuffer[p];    //read from local buffer    
   }
+  return c;
+}
+
+void sendData(){
+  int p = reg % sizeof(regbuffer); 
+  byte c;
+  delayMicroseconds(20);
+  c = readData(p, read_eeprom);
   Wire.write(c);
 }
 
