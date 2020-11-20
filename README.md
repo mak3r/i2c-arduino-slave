@@ -12,57 +12,51 @@ The following section detailing the *I2C Slave Configuration Registers* provides
 ### The first 4 *reserved* registers
 The first 4 registers are special use registers for enabling the setup and development of a device as an I2C slave. There is one *control register* which is used to manipulate how the devices reads/writes I2C data. The *control register* is read when the device starts and Actions are taken according to the corresponding bit mask. The *control register* is an 8 bit mask and has 3 different types of operation:
 1. Control Actions which are immediate (unless the NOACTION bit is set). These actions effect the memory storage location (EEPROM vs in-memory).
-	* Load EEPROM to local memory - writes to in-memory regardless of the WRITE_TO_EEPROM bit
-	* Store all received values into EEPROM registers
+	* Load EEPROM to local memory 
 	* Always read registers from EEPROM
 	* Force device reset
-1. One time Actions which occur immediately. 
+1. One time Actions which occur immediately. These correlating bits are not stored in the control register. 
 	* Reset all EEPROM registers - operates on EEPROM regardless of the WRITE_TO_EEPROM bit
 	* Load local memory into EEPROM
 	* Force device reset
-1. Restart Actions which are delayed until restart
+1. Restart Actions which are delayed until restart. The correlating bit is stored in the control register.
 	* Load slave address
 With the exception of the *Restart Action*, all other *Actions* happen immediately when processed unless the NOACTION bit is set. If the NOACTION bit is set 
 * The action bits are unprocessed and 
 * The mask is written to the corresponding persistent register based on the WRITE_TO_EEPROM bit
 
-Some actions are persistent. The correlating bits are stored in the control register and persist between restarts. 
+Some actions also have persistent bits. The correlating program flags are set or actions are taken and the bits are preserved. 
 * Persistent Actions
 	* Load slave address from register
 	* Load EEPROM to local memory
-	* Store all received values into EEPROM registers
 	* Always read registers from EEPROM
-
 * The persistent mask can be represented by either
-	* B00011110  
-	* 0x1E
+	* B00001110  
+	* 0x0E
 * Whenever the Control Register is modified, the changes are made by reading the values of the least significant bit first.
 
 * Read location.
 	* The program will always read from in-memory store unless the READ_FROM_EEPROM bit is set. In which case, it will read from EEPROM
+	* This is useful for operating from EEPROM while also making updates to the in-memory store - which can later be transferred to EEPROM
 
 ```
 0x00 - EEPROM Control Register
     - Controls the reading and writing to EEPROM via I2C
     - Default 0x02
     Mask values 
-    - 0x01 NOACTION 
-		- don't make any changes based on the incoming mask bits
-		- store the incoming mask according to the current read location
-		- this bit will always be 0 in the saved register 
-    - 0x02 Load slave address from register (control register + 0x01) - only on power recycle
+    - 0x01 UNUSED_01 
     - 0x04 Load EEPROM to local memory
-    - 0x08 Store all received values into EEPROM registers 
-        - if this bit is not set, values are stored in local memory
-    - 0x10 Always read registers from EEPROM
+    - 0x08 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
-    - 0x20 Reset all EEPROM registers including the control register to default values
-		- this bit will always be 0 in the saved register
+    - 0x10 UNUSED_02
+    - 0x20 Reset all registers including the control register to default values
+		  - this bit will always be 0 in the saved register
     - 0x40 Load local memory into EEPROM - including control register 0x00 
-		- this bit will always be 0 in the saved register
+		  - this bit will always be 0 in the saved register
     - 0x80 Force device reset 
-		- this bit will always be 0 in the saved register
+		  - this bit will always be 0 in the saved register
 ```
+
 ### Slave Alternate Address
 The program allows for selecting any I2C slave address as this devices address as long as it is within the range 0x03 to 0x77. *NOTE* The slave alternate address will only be loaded if the EEPR0M_SLAVE_ALT bit is set in the control register.
 

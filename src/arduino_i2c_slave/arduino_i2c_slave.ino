@@ -9,16 +9,15 @@
     - Controls the reading and writing to EEPROM via I2C
     - Default 0x02
     Mask values 
-    - 0x01 WRITE_REG_UPDATE 
-      - Instead of overwriting the control register,
-  		- Combine the incoming bits with the current value of the control register
-		  - this bit will always be 0 in the saved register 
-    - 0x02 Load slave address from register (control register + 0x01) - only on power recycle
+    - 0x01 Write the bits to the control register but do not
+      - overwrite in-memory store even if the bit is set
     - 0x04 Load EEPROM to local memory
-    - 0x08 Store all received values into EEPROM registers 
-        - if this bit is not set, values are stored in local memory
-    - 0x10 Always read registers from EEPROM
+    - 0x08 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
+    - 0x10 This bit is ignored on the incoming control value
+      - This bit is stored and returned based on the EEPROM read value
+      - 1 when reading from EEPROM
+      - 0 when reading from in-memory
     - 0x20 Reset all registers including the control register to default values
 		  - this bit will always be 0 in the saved register
     - 0x40 Load local memory into EEPROM - including control register 0x00 
@@ -62,13 +61,13 @@
 #define PC_START_REG      0x04 // Default program control start index
 
 //Control Register Bit Masks
-#define WRITE_REG_UPDATE        0x01
+#define LOCAL_PRESERVE          0x01
 #define I2C_SLAVE_ALT           0x02
 #define LOAD_EEPROM_TO_LOCAL    0x04
-#define WRITE_TO_EEPROM         0x08
-#define READ_FROM_EEPROM        0x10
+#define READ_FROM_EEPROM        0x08
+#define READ_LOCATION           0x10
 #define EEPROM_RESET            0X20
-#define LOAD_EEPROM_FROM_LOCAL  0x40
+#define LOAD_LOCAL_TO_EEPROM    0x40
 #define DEVICE_RESET            0x80
 
 
@@ -82,9 +81,10 @@ static const int NUM_REGISTERS=256;
 int reg = 0;
 byte regbuffer[NUM_REGISTERS];
 bool read_eeprom = false;
-bool write_eeprom = false;
 bool use_slave_alt = false;
 int reset_pin = 12;
+bool device_reset = false;
+
 
 //Code Initialization
 void setup() {
@@ -94,7 +94,7 @@ void setup() {
   Serial.begin(9600);
   //Serial.println("initializing ...");
 
-  // initialize EEPROM control mode
+  // initialize control mode based on EEPROM 
   byte cr = EEPROM.read(CONTROL_REG);  
   //Serial.print("Updating control .. ");
   //Serial.println(cr, BIN);
@@ -106,108 +106,115 @@ void setup() {
   // initialize i2c as slave
   byte i2c_slave_addr = I2C_SLAVE_ADDRESS;
   if (use_slave_alt) {
-    //Serial.println("using slave alt address");
-    if (i2c_slave_addr >= 0x03 && i2c_slave_addr <= 0x77) { //I2C standard address range 0x03-0x77
-      //Serial.println("slave alt address in range");
-      i2c_slave_addr = EEPROM.read(I2C_ADDR_REG);
+    i2c_slave_addr = EEPROM.read(I2C_ADDR_REG);
+    if (i2c_slave_addr < 0x03 || i2c_slave_addr > 0x77) { 
+      //I2C standard address range 0x03-0x77
+      // Out of range
+      // Revert to the stored addres
+      i2c_slave_addr = I2C_SLAVE_ADDRESS;
     }
   }
   //Serial.println(i2c_slave_addr, HEX);
   Wire.begin(i2c_slave_addr);
   // define callbacks for i2c communication
-  Wire.onReceive(receiveData);
-  Wire.onRequest(sendData);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(sendEvent);
 }
 
 void loop() {
   delay(100);
+  if (device_reset)
+    digitalWrite(reset_pin, LOW);
+
 } // end loop
 
 void controlUpdated(byte cr) {
   byte cntrl_reg_val = cr;
   byte control_mask = 0x01;
-  byte perma_mask = B00011110; // only the respected bits should be stored
+  byte perma_mask = B00001110; // only the respected bits should be stored
                                // AND this with the cntrl_reg_val
-  bool reset_ready = false;
-  bool update_write_reg = false;
-  //Serial.print("cntrl_reg_val: ");      
-  //Serial.println(cntrl_reg_val, BIN);        
+  // Serial.print("cntrl_reg_val: ");      
+  // Serial.println(cntrl_reg_val, BIN);        
+
+  bool local_preserve = false;
 
   //Mark the current state of these booleans
-  byte stored_state = ( read_eeprom ? EEPROM.read(0x00) : regbuffer[CONTROL_REG] );
-  write_eeprom = stored_state & WRITE_TO_EEPROM;
+  byte stored_state = ( read_eeprom ? EEPROM.read(CONTROL_REG) : regbuffer[CONTROL_REG] );
   read_eeprom = stored_state & READ_FROM_EEPROM;
   use_slave_alt = stored_state & I2C_SLAVE_ALT;
 
   byte cur_control = control_mask & cntrl_reg_val;
   while (control_mask > 0) {
-    //Serial.print("cur_control: ");      
-    //Serial.println(cur_control, BIN);        
+    // Serial.print("cur_control: ");      
+    // Serial.println(cur_control, BIN);        
     switch (cur_control) {
       case 0x00:
       {
-        //Serial.println("Case 0");
         break;
       }
-      case WRITE_REG_UPDATE:
+      case LOCAL_PRESERVE:
       {
-        update_write_reg = true;
+        // Serial.println("Case LOCAL_PRESERVE");
+        local_preserve = true;
         break;
       }
       case I2C_SLAVE_ALT: 
       {
-        //Serial.println("Case I2C_SLAVE_ALT");
+        // Serial.println("Case I2C_SLAVE_ALT");
         use_slave_alt = true;
         break;
       }
       case LOAD_EEPROM_TO_LOCAL: 
       {
-        //Serial.println("Case LOAD_EEPROM_TO_LOCAL");
-        //copy EEPROM data to local registers
-        for (int i = 0; i < NUM_REGISTERS; i++) {
-          regbuffer[i] = EEPROM.read(i);
+        // Serial.println("Case LOAD_EEPROM_TO_LOCAL");
+        if (!local_preserve) {
+          //copy EEPROM data to local registers
+          for (int i = CONTROL_REG; i < NUM_REGISTERS; i++) {
+            regbuffer[i] = EEPROM.read(i);
+          }
         }
-        break;
-      }
-      case WRITE_TO_EEPROM: 
-      {
-        //Serial.println("Case WRITE_TO_EEPROM");        
-        write_eeprom = true;
         break;
       }
       case READ_FROM_EEPROM: 
       {
-        //Serial.println("Case READ_FROM_EEPROM");        
+        // Serial.println("Case READ_FROM_EEPROM");        
         read_eeprom = true;
+        break;
+      }
+      case READ_LOCATION: 
+      {
+        // Serial.println("Case READ_LOCATION");        
         break;
       }
       case EEPROM_RESET: 
       {
-        //Serial.println("Case EEPROM_RESET");
-        //delay(200);
-        cntrl_reg_val = CONTROL_DEFAULT_VAL; //This must be set because the loop exit option will try again
-        safeWriteEEPROM(CONTROL_REG, cntrl_reg_val & perma_mask);
-        safeWriteEEPROM(I2C_ADDR_REG, I2C_SLAVE_ADDRESS); 
-        safeWriteEEPROM(DEFAULT_VAL_REG, REGISTERS_DEFAULT_VAL);
+        // Serial.println("Case EEPROM_RESET");
+        //cntrl_reg_val = CONTROL_DEFAULT_VAL; //This must be set because the loop exit option will try again
+        EEPROM.update(CONTROL_REG, CONTROL_DEFAULT_VAL & perma_mask);
+        EEPROM.update(I2C_ADDR_REG, I2C_SLAVE_ADDRESS); 
+        EEPROM.update(DEFAULT_VAL_REG, REGISTERS_DEFAULT_VAL);
         byte c = EEPROM.read(DEFAULT_VAL_REG);
         for (int i = PC_START_REG; i < NUM_REGISTERS; i++) {
-          safeWriteEEPROM(i, c);
+          EEPROM.update(i, c);
         }
         break;
       }
-      case LOAD_EEPROM_FROM_LOCAL: 
+      case LOAD_LOCAL_TO_EEPROM: 
       {
-        //Serial.println("Case LOAD_EEPROM_FROM_LOCAL");        
+        // Serial.println("Case LOAD_LOCAL_TO_EEPROM");        
         //copy local registers to EEPROM
-        for (int i = 0x00; i < NUM_REGISTERS; i++) {
-          safeWriteEEPROM(i, regbuffer[i]);
+        for (int i = CONTROL_REG; i < NUM_REGISTERS; i++) {
+          if (i != CONTROL_REG) 
+            EEPROM.update(i, regbuffer[i]);
+          else
+            EEPROM.update(i, cntrl_reg_val & perma_mask);
         }
         break;
       }
       case DEVICE_RESET: 
       {
-        //Serial.println("Case DEVICE_RESET");
-        reset_ready = true;
+        // Serial.println("Case DEVICE_RESET");
+        device_reset = true;
         break;
       }
     }
@@ -216,21 +223,12 @@ void controlUpdated(byte cr) {
     //Serial.print("control_mask :");
     //Serial.println(control_mask, BIN);
   }
-  //store the respected bits of the control register value
-  //Serial.print("control_updated :");
-  //Serial.println(cntrl_reg_val & perma_mask, BIN);
-  if (update_write_reg) {
-    // combine the incoming bits with the appropriate control register value
-    cntrl_reg_val = cntrl_reg_val | readData(CONTROL_REG, write_eeprom);
-  }
-  // Store the final control register value
-  storeData(CONTROL_REG, cntrl_reg_val & perma_mask);
-  if (reset_ready)
-    digitalWrite(reset_pin, LOW);
+  // Store the incoming control register value
+  regbuffer[CONTROL_REG] = cntrl_reg_val & perma_mask;
 
 }
 
-void receiveData(int len){
+void receiveEvent(int len){
   if(len == 1){ // One Byte Data received -> Read Request Address
     reg = Wire.read();
   } else {
@@ -239,45 +237,30 @@ void receiveData(int len){
     delayMicroseconds(20);
     while(Wire.available() > 0){
       rx %= sizeof(regbuffer);
-      byte data_in = Wire.read();  //pull in the latest byte of data and process it
-      if (rx == CONTROL_REG) {
-        controlUpdated(data_in); //Control register data is a special case
-      } else {
-        storeData(rx, data_in);
-      }
+      regbuffer[rx] = Wire.read();  //pull in the latest byte of data and process it
+      if (rx == CONTROL_REG)
+        controlUpdated(regbuffer[rx]);
       rx++;
     }
   }
 }
 
-void storeData(byte reg, byte content) {
-  if ( write_eeprom && (reg < EEPROM.length()) ) //NOTE: The EEPROM size varies depending on the arduino board
-    safeWriteEEPROM(reg, content); //Assign the byte to eeprom
-  else
-    regbuffer[reg] = content; //Assign the byte to the in-memory array
-}
-
-void safeWriteEEPROM(byte reg, byte content) {
-  //Only write to EEPROM if the value is not the same as the existing value
-  //Serial.print("current reg: 0x" );
-  //Serial.println(EEPROM.read(reg), HEX );
-  //Serial.print("content: 0x" );
-  //Serial.println(content, HEX );
-  //Serial.println(" ********* writing eeprom ********" );
-  EEPROM.update(reg, content);
-}
-
 byte readData(int p, bool from_eeprom) {
   byte c;
   if (from_eeprom) {
-    c = EEPROM.read(p);   // read from eeprom
+    // read from eeprom
+    if (p == CONTROL_REG)
+      //add the READ_LOCATION bit flag
+      c = (EEPROM.read(p) | B00010000);   
+    else
+      c = (EEPROM.read(p));
   } else {
     c = regbuffer[p];    //read from local buffer    
   }
   return c;
 }
 
-void sendData(){
+void sendEvent(){
   int p = reg % sizeof(regbuffer); 
   byte c;
   delayMicroseconds(20);
