@@ -1,13 +1,33 @@
 #!/bin/bash
 
-echo 
+source ./i2c-assistant.sh
 
-i2cset -y 1 0x08 0x01 0x33 #set the slave address to 0x33
-i2cset -y 1 0x08 0x00 0x81 #set the control register to use the new slave address and reset the device 
-i2cset -y 1 0x33 0x00 0x03 #using the new slave address. Retain the use of the slave address and load EEPROM content to the local memory registers
+DEVICE_ADDRESS="0x08"
 
-if ( "$(i2cget -y 1 0x33 0x00)" == "0x33" )
-	exit 0;
-else
-	exit 1;
+detect $DEVICE_ADDRESS # make sure the slave is at the expected address
+if [ "$?" = "0" ]; then
+  # Reset EEPROM and restart the device to run this test
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0xA0
+  sleep 2 # give a moment for restart
+  verify "$DEVICE_ADDRESS" "0x00" "0x04"
+
+  # All registers in EEPROM should be value 0x00
+  # Set some registers in-memory 
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x16 0xF2
+  verify "$DEVICE_ADDRESS" "0x16" "0xF2"
+
+  # Now set the read from EEPROM flag 
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x08
+  verify "$DEVICE_ADDRESS" "0x00" "0x14"
+
+  # and check the same register
+  verify "$DEVICE_ADDRESS" "0x16" "0x00"
+
+  # cleanup
+  # reset the device is all we need to do since
+  # eeprom hasn't changed since we reset it.
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x80
+else 
+	echo "Did not find expected device at address "$DEVICE_ADDRESS"." 1>&2
+	exit 1
 fi
