@@ -44,11 +44,15 @@ Some actions also have persistent bits. The correlating program flags are set or
     - Controls the reading and writing to EEPROM via I2C
     - Default 0x02
     Mask values 
-    - 0x01 UNUSED_01 
+    - 0x01 Write the bits to the control register but do not
+      - overwrite in-memory store even if the bit is set
     - 0x04 Load EEPROM to local memory
     - 0x08 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
-    - 0x10 UNUSED_02
+    - 0x10 This bit is ignored on the incoming control value
+      - This bit is stored and returned based on the EEPROM read value
+      - 1 when reading from EEPROM
+      - 0 when reading from in-memory
     - 0x20 Reset all registers including the control register to default values
 		  - this bit will always be 0 in the saved register
     - 0x40 Load local memory into EEPROM - including control register 0x00 
