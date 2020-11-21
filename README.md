@@ -122,4 +122,15 @@ i2cset -y 1 0x08 0x00 0xC8	# Set the system to read EEPROM registers on restart,
         `delayMicroseconds(20);` 
 
 
-
+## Testing
+* Tests must be run from a Master with `i2c-tools` installed.
+* The Arduino must have the program loaded an the reset pin wired to pin 12
+* Copy the `Makefile` and `test/` directory to the same location on master
+* From the location of the Makefile, run `make target` 
+* Also, it's possible to create an output log with `make target >> make.log 2>&1`
+* Sometimes there are errors with i2c-tools in which an erroneous value `XX` is received. This causes errors like the following in the output. Note: the Unexpected value is blank
+    ```
+	Error: Read failed
+	FAIL: Expected register 0x31 value to be 0x00
+	FAIL: Unexpected value:
+    ```
