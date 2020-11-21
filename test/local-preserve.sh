@@ -21,25 +21,13 @@ if [ "$?" = "0" ]; then
     verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x${regval[$i]}" # verify
   done
 
-  # Setup in-memory to load EEPROM to local on restart
-  # and read from eeprom
-  # and restart the device
-  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0xC8
-  verify "$DEVICE_ADDRESS" "0x00" "0x18" 
-  sleep 2
-  # check that the program registers are set 
+  # Set the LOAD_EEPROM_TO_LOCAL with
+  # LOCAL_PRESERVE set also
+  # Our registers in-memory should remain the same
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x05
+  verify "$DEVICE_ADDRESS" "0x00" "0x04" 
   for i in ${!register[@]}; do
     verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x${regval[$i]}" # verify
-  done
-
-  # Now unset the read from EEPROM flag 
-  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x00
-  verify "$DEVICE_ADDRESS" "0x00" "0x00" # note the READ_LOCATION bit is not set
-
-  # check the same registers in-memory for value 0
-  # this confirms the restart since it overwrote the program registers
-  for i in ${!register[@]}; do
-    verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x00" # registers start at 0
   done
 
   # cleanup
