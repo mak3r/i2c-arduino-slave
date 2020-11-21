@@ -136,12 +136,9 @@ void controlUpdated(byte cr) {
   // Serial.print("cntrl_reg_val: ");      
   // Serial.println(cntrl_reg_val, BIN);        
 
+  read_eeprom = false;
+  use_slave_alt = false;
   bool local_preserve = false;
-
-  //Mark the current state of these booleans
-  byte stored_state = ( read_eeprom ? EEPROM.read(CONTROL_REG) : regbuffer[CONTROL_REG] );
-  read_eeprom = stored_state & READ_FROM_EEPROM;
-  use_slave_alt = stored_state & I2C_SLAVE_ALT;
 
   byte cur_control = control_mask & cntrl_reg_val;
   while (control_mask > 0) {
