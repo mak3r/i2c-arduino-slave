@@ -4,15 +4,30 @@ source ./i2c-assistant.sh
 
 DEVICE_ADDRESS="0x08"
 
-detect $DEVICE_ADDRESS # make sure the slave is at the expected address
-if [ "$?" = "0" ]; then
-  # Reset EEPROM and restart the device to run this test
-  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0xA0
-  sleep 2 # give a moment for restart
-  verify "$DEVICE_ADDRESS" "0x00" "0x04"
+function reset_eeprom {
+  # Reset EEPROM 
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x20
+  # in-memory control register is now 0x00
+  verify "$DEVICE_ADDRESS" "0x00" "0x00"
+
+  # setup READ_FROM_EEPROM 
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x08
+  verify_control_reg_defaults "$DEVICE_ADDRESS"
 
   # All registers in EEPROM should be value 0x00
+  # Let's check
+  for i in {4..255}; do
+    hexi=$(printf "%x" "$i")
+    verify "$DEVICE_ADDRESS" "0x$hexi" "0x00"
+  done
+}
+
+detect $DEVICE_ADDRESS # make sure the slave is at the expected address
+if [ "$?" = "0" ]; then
+  reset_eeprom
+
   # Now write some things to in-memory 
+  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x00
   register=(16 26 32 9B F7)
   regval=(10 20 30 40 50)
   for i in ${!register[@]}; do
@@ -21,25 +36,17 @@ if [ "$?" = "0" ]; then
     verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x${regval[$i]}" # verify
   done
 
-  # Now set the read from EEPROM flag 
-  i2cset -y 1 "$DEVICE_ADDRESS" 0x00 0x08
-  verify "$DEVICE_ADDRESS" "0x00" "0x14"
-
-  # and check the same registers
-  verify "$DEVICE_ADDRESS" "0x16" "0x00"
-  for i in ${!register[@]}; do
-    verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x00" # registers start at 0
-  done
-
-  # now LOAD_LOCAL_TO_EEPROM 
-  # note: register 0x00 in-memory was 0x08 before this operation
-  # and prepare to read eeprom
+  # now write those things to eeprom
+  # and preparet to read eeprom
   i2cset -y 1 "$DEVICE_ADDRESS" "0x00" "0x48"
-  verify "$DEVICE_ADDRESS" "0x00" "0x18" # Reading from EEPROM
+  verify "$DEVICE_ADDRESS" "0x00" "0x18"
   for i in ${!register[@]}; do
     verify "$DEVICE_ADDRESS" "0x${register[$i]}" "0x${regval[$i]}" # verify
   done
 
+  # Test EEPROM_RESET again
+  reset_eeprom
+  
   # cleanup
   # reset the device is all we need to do since
   # eeprom hasn't changed since we reset it.
