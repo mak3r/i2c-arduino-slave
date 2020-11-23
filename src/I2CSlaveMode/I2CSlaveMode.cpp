@@ -105,8 +105,6 @@ I2CSlaveMode::I2CSlaveMode(byte address, int pin)
   digitalWrite(_reset_pin, HIGH);
   pinMode(_reset_pin, OUTPUT);
   // Initialize Serial communication
-  Serial.begin(9600);
-  Serial.write("Starting I2CSlaveMode");
   // initialize control mode based on EEPROM 
   byte cr = EEPROM.read(CONTROL_REG);  
   controlUpdated(cr);
