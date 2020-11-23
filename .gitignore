@@ -2,3 +2,4 @@
 *.hex
 local/
 .DS_Store
+release/
