@@ -27,8 +27,8 @@ if [ "$?" = "0" ]; then
   verify "$ORIG_ADDRESS" "0x01" "$ALT_ADDRESS"
 
   # write it all to eeprom
-  i2cset -y 1 "$ORIG_ADDRESS" 0x00 0x4F
-  verify "$ORIG_ADDRESS" "0x00" "0x16" # reading from in-memory
+  i2cset -y 1 "$ORIG_ADDRESS" 0x00 0x47
+  verify "$ORIG_ADDRESS" "0x00" "0x06" 
   verify "$ORIG_ADDRESS" "0x01" "$ALT_ADDRESS"
     
   # reset the device
@@ -42,8 +42,11 @@ if [ "$?" = "0" ]; then
     exit 1
   fi
 
-  # Make sure the defaults are as expected
-  verify_control_reg_defaults "$ALT_ADDRESS"
+  # Make sure the reserved registers are as expected
+  verify "$ALT_ADDRESS" "0x00" "0x06"
+  verify "$ALT_ADDRESS" "0x01" "0x33"
+  verify "$ALT_ADDRESS" "0x02" "0x00"
+  verify "$ALT_ADDRESS" "0x03" "0x00"
 
   # cleanup
   i2cset -y 1 "$ALT_ADDRESS" 0x00 0xA0

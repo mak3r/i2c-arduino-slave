@@ -1,4 +1,11 @@
 /*
+	Library for accessing Arduino in I2C slave mode.
+	Assumes 256 registers similar to hardware I2C slave devices
+	Created by: Mark Abrams, November 22, 2020
+	github: @mak3r
+	Licence: Apache2
+
+  /*
   I2C Pinouts
   SDA -> A4
   SCL -> A5
@@ -42,14 +49,11 @@
     - use as needed based on I2C communication via the device
 
 
- Author: Mark Abrams
- github: @mak3r
- Created: November 22, 2020
- 
- */
-
-#include <Wire.h>
-#include <EEPROM.h>
+*/
+#include "Arduino.h"
+#include "Wire.h"
+#include "EEPROM.h"
+#include "I2CSlaveMode.h"
 
 //Slave Address for the Communication
 #define I2C_SLAVE_ADDRESS 0x08
@@ -78,58 +82,86 @@
 //Default bit mask of the control register
 #define CONTROL_DEFAULT_VAL LOAD_EEPROM_TO_LOCAL
 
-static const int NUM_REGISTERS=256;
-int reg = 0;
-byte regbuffer[NUM_REGISTERS];
-bool read_eeprom = false;
-bool use_slave_alt = false;
-int reset_pin = 12;
-bool device_reset = false;
+static int I2CSlaveMode::_reg = 0;
+static byte I2CSlaveMode::_regbuffer[NUM_REGISTERS];
+static bool I2CSlaveMode::_read_eeprom = false;
+static bool I2CSlaveMode::_use_slave_alt = false;
+static int I2CSlaveMode::_reset_pin = 12;
+static bool I2CSlaveMode::_device_reset = false;
 
+I2CSlaveMode::I2CSlaveMode()
+{
+  I2CSlaveMode(I2C_SLAVE_ADDRESS);
+}
 
-//Code Initialization
-void setup() {
-  digitalWrite(reset_pin, HIGH);
-  pinMode(reset_pin, OUTPUT);
+I2CSlaveMode::I2CSlaveMode(byte address)
+{
+  I2CSlaveMode(address, _reset_pin);
+}
+
+I2CSlaveMode::I2CSlaveMode(byte address, int pin)
+{
+  _reset_pin = pin;
+  digitalWrite(_reset_pin, HIGH);
+  pinMode(_reset_pin, OUTPUT);
   // Initialize Serial communication
   Serial.begin(9600);
-  //Serial.println("initializing ...");
-
+  Serial.write("Starting I2CSlaveMode");
   // initialize control mode based on EEPROM 
   byte cr = EEPROM.read(CONTROL_REG);  
-  //Serial.print("Updating control .. ");
-  //Serial.println(cr, BIN);
   controlUpdated(cr);
 
-  //Serial.println("Setting slave address");
-  //Serial.print("Alt address: ");
-  //Serial.println(EEPROM.read(I2C_ADDR_REG), HEX);
   // initialize i2c as slave
-  byte i2c_slave_addr = I2C_SLAVE_ADDRESS;
-  if (use_slave_alt) {
+  byte i2c_slave_addr = address;
+  if (_use_slave_alt) {
     i2c_slave_addr = EEPROM.read(I2C_ADDR_REG);
     if (i2c_slave_addr < 0x03 || i2c_slave_addr > 0x77) { 
       //I2C standard address range 0x03-0x77
       // Out of range
-      // Revert to the stored addres
+      // Revert to the default addres
       i2c_slave_addr = I2C_SLAVE_ADDRESS;
     }
   }
-  //Serial.println(i2c_slave_addr, HEX);
   Wire.begin(i2c_slave_addr);
   // define callbacks for i2c communication
   Wire.onReceive(receiveEvent);
   Wire.onRequest(sendEvent);
 }
 
-void loop() {
-  delay(100);
-  if (device_reset)
-    digitalWrite(reset_pin, LOW);
+void I2CSlaveMode::resetIfRequested() 
+{
+  if (_device_reset)
+    digitalWrite(_reset_pin, LOW);
+}
 
-} // end loop
+const byte I2CSlaveMode::getRegister(byte address)
+{
+  return _regbuffer[address];
+}
 
-void controlUpdated(byte cr) {
+const byte* I2CSlaveMode::getRange(byte start, byte end)
+{
+  byte buffer[end-start];
+  for (byte i = start; i++ ; i<end) {
+    buffer[i] = _regbuffer[i];
+  }
+  return buffer;
+}
+
+const byte* I2CSlaveMode::getBuffer()
+{
+  return _regbuffer;
+}
+
+void* I2CSlaveMode::bufferChanged(int *ptr)
+{
+
+}
+
+/*
+  private methods
+*/
+static void I2CSlaveMode::controlUpdated(byte cr) {
   byte cntrl_reg_val = cr;
   byte control_mask = 0x01;
   byte perma_mask = B00001110; // only the respected bits should be stored
@@ -137,8 +169,8 @@ void controlUpdated(byte cr) {
   // Serial.print("cntrl_reg_val: ");      
   // Serial.println(cntrl_reg_val, BIN);        
 
-  read_eeprom = false;
-  use_slave_alt = false;
+  _read_eeprom = false;
+  _use_slave_alt = false;
   bool local_preserve = false;
 
   byte cur_control = control_mask & cntrl_reg_val;
@@ -159,7 +191,7 @@ void controlUpdated(byte cr) {
       case I2C_SLAVE_ALT: 
       {
         // Serial.println("Case I2C_SLAVE_ALT");
-        use_slave_alt = true;
+        _use_slave_alt = true;
         break;
       }
       case LOAD_EEPROM_TO_LOCAL: 
@@ -168,7 +200,7 @@ void controlUpdated(byte cr) {
         if (!local_preserve) {
           //copy EEPROM data to local registers
           for (int i = CONTROL_REG; i < NUM_REGISTERS; i++) {
-            regbuffer[i] = EEPROM.read(i);
+            _regbuffer[i] = EEPROM.read(i);
           }
         }
         break;
@@ -176,7 +208,7 @@ void controlUpdated(byte cr) {
       case READ_FROM_EEPROM: 
       {
         // Serial.println("Case READ_FROM_EEPROM");        
-        read_eeprom = true;
+        _read_eeprom = true;
         break;
       }
       case READ_LOCATION: 
@@ -203,7 +235,7 @@ void controlUpdated(byte cr) {
         //copy local registers to EEPROM
         for (int i = CONTROL_REG; i < NUM_REGISTERS; i++) {
           if (i != CONTROL_REG) 
-            EEPROM.update(i, regbuffer[i]);
+            EEPROM.update(i, _regbuffer[i]);
           else
             EEPROM.update(i, cntrl_reg_val & perma_mask);
         }
@@ -212,7 +244,7 @@ void controlUpdated(byte cr) {
       case DEVICE_RESET: 
       {
         // Serial.println("Case DEVICE_RESET");
-        device_reset = true;
+        _device_reset = true;
         break;
       }
     }
@@ -222,28 +254,28 @@ void controlUpdated(byte cr) {
     //Serial.println(control_mask, BIN);
   }
   // Store the incoming control register value
-  regbuffer[CONTROL_REG] = cntrl_reg_val & perma_mask;
+  _regbuffer[CONTROL_REG] = cntrl_reg_val & perma_mask;
 
 }
 
-void receiveEvent(int len){
+static void I2CSlaveMode::receiveEvent(int len){
   if(len == 1){ // One Byte Data received -> Read Request Address
-    reg = Wire.read();
+    _reg = Wire.read();
   } else {
-    reg = 0;
+    _reg = 0;
     byte rx = Wire.read();
     delayMicroseconds(20);
     while(Wire.available() > 0){
-      rx %= sizeof(regbuffer);
-      regbuffer[rx] = Wire.read();  //pull in the latest byte of data and process it
+      rx %= sizeof(_regbuffer);
+      _regbuffer[rx] = Wire.read();  //pull in the latest byte of data and process it
       if (rx == CONTROL_REG)
-        controlUpdated(regbuffer[rx]);
+        controlUpdated(_regbuffer[rx]);
       rx++;
     }
   }
 }
 
-byte readData(int p, bool from_eeprom) {
+static byte I2CSlaveMode::readData(int p, bool from_eeprom) {
   byte c;
   if (from_eeprom) {
     // read from eeprom
@@ -253,17 +285,15 @@ byte readData(int p, bool from_eeprom) {
     else
       c = (EEPROM.read(p));
   } else {
-    c = regbuffer[p];    //read from local buffer    
+    c = _regbuffer[p];    //read from local buffer    
   }
   return c;
 }
 
-void sendEvent(){
-  int p = reg % sizeof(regbuffer); 
+static void I2CSlaveMode::sendEvent(){
+  int p = _reg % sizeof(_regbuffer); 
   byte c;
   delayMicroseconds(20);
-  c = readData(p, read_eeprom);
+  c = readData(p, _read_eeprom);
   Wire.write(c);
 }
-
-//End of the program

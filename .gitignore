@@ -1,3 +1,4 @@
 .vscode/
 *.hex
 local/
+.DS_Store
