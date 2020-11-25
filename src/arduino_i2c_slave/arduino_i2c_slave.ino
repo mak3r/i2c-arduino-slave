@@ -7,10 +7,12 @@
 /*
 0x00 - EEPROM Control Register
     - Controls the reading and writing to EEPROM via I2C
-    - Default 0x02
+    - Default Value 0x02
+
     Mask values 
     - 0x01 Write the bits to the control register but do not
       - overwrite in-memory store even if the bit is set
+    - 0x02 Use the i2c slave alternate address in register 0x01
     - 0x04 Load EEPROM to local memory
     - 0x08 Always read registers from EEPROM
         - if this bit is not set, values are read from local memory
