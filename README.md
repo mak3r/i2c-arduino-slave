@@ -27,16 +27,20 @@ The **control register** is parsed as an 8 bit mask. Each bit instructs the I2C 
 - 0x08 `READ_FROM_EEPROM` Read registers from EEPROM
     - if this bit is not set, values are read from in-memory
 - 0x10 `READ_LOCATION` This is a read only bit. The value of this bit when sending the control register mask into the device.
-  - This bit is stored and returned based on the programs EEPROM read value
+  - This bit is will always be 0 in the saved register
+  - The value returned is based on the programs EEPROM read value
   - Bit value is `1` when reading from EEPROM
   - Bit value is `0` when reading from in-memory
   - The purpose of this bit is to allow the master to detect where it is reading from.
 - 0x20 `EEPROM_RESET` Reset all registers including the control register to default values
-	  - this bit will always be 0 in the saved register
+
+	- this bit will always be 0 in the saved register
 - 0x40 `LOAD_LOCAL_TO_EEPROM` Load local memory into EEPROM - including control register 0x00 
-	  - this bit will always be 0 in the saved register
+
+	- this bit will always be 0 in the saved register
 - 0x80 `DEVICE_RESET` Force device reset 
-	  - this bit will always be 0 in the saved register
+
+	- this bit will always be 0 in the saved register
 
 ### Control Process
 Whenever the Control Register is modified, the changes are made by reading the values of the least significant bit first.
