@@ -14,3 +14,6 @@ archive: clean
 release: archive
 	if [ ! -d "./release" ]; then mkdir release; fi; \
 	mv src/I2CSlaveMode.zip release/.
+
+install: 
+	cp -r src/I2CSlaveMode ~/Documents/Arduino/libraries/

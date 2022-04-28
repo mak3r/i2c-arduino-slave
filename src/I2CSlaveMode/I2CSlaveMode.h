@@ -66,6 +66,10 @@ class I2CSlaveMode {
 			to the Arduino resetPin
 		*/
 		void resetIfRequested();
+
+		/*  Get the address of the i2c slave */
+		uint8_t getAddress();
+		
 	private:
 		static const int NUM_REGISTERS = 256;
 		static int _reg;
@@ -74,7 +78,8 @@ class I2CSlaveMode {
 		static bool _use_slave_alt;
 		static int _reset_pin;
 		static bool _device_reset;
-
+		static uint8_t _i2c_slave_address;
+		
 		static void controlUpdated(byte cr);
 		static void receiveEvent(int len);
 		static byte readData(int p, bool from_eeprom);
