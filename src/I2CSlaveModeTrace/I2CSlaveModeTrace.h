@@ -5,27 +5,27 @@
 	github: @mak3r
 	Licence: Apache2
 */
-#ifndef I2CSlaveMode_h
-#define I2CSlaveMode_h
+#ifndef I2CSlaveModeTrace_h
+#define I2CSlaveModeTrace_h
 
 #include "Arduino.h"
 
 
-class I2CSlaveMode {
+class I2CSlaveModeTrace {
 	
 	public:
 		/*
 			Handle I2C interactions as an I2C slave on 
 			the default bus address 
 		*/
-		I2CSlaveMode();
+		I2CSlaveModeTrace();
 		/*
 			Handle I2C interactions as an I2C slave on 
 			the address provided.
 			I2C addressing limits the acceptable range 
 			to be between 0x03 and 0x77
 		*/
-		I2CSlaveMode(byte address);
+		I2CSlaveModeTrace(byte address);
 		/*
 			Handle I2C interactions as an I2C slave on 
 			the address provided.
@@ -36,7 +36,7 @@ class I2CSlaveMode {
 			The default if not set is
 			to use pin 12
 		*/
-		I2CSlaveMode(byte address, int pin);
+		I2CSlaveModeTrace(byte address, int pin);
 		/*
 			Get a value from a register.
 			Registers range between 0x00 and 0xFF

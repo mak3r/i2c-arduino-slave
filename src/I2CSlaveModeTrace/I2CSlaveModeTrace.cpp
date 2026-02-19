@@ -53,7 +53,8 @@
 #include "Arduino.h"
 #include "Wire.h"
 #include "EEPROM.h"
-#include "I2CSlaveMode.h"
+#include "I2CSlaveModeTrace.h"
+#include <ArduinoTrace.h>
 
 //Slave Address for the Communication
 #define I2C_SLAVE_ADDRESS 0x08
@@ -90,25 +91,25 @@
 // May impact I2C but depends on what other control commands are issued
 // #define INIT_DEBUG 1
 
-static int I2CSlaveMode::_reg = 0;
-static byte I2CSlaveMode::_regbuffer[NUM_REGISTERS];
-static bool I2CSlaveMode::_read_eeprom = false;
-static bool I2CSlaveMode::_use_slave_alt = false;
-static int I2CSlaveMode::_reset_pin = 12;
-static bool I2CSlaveMode::_device_reset = false;
-static uint8_t I2CSlaveMode::_i2c_slave_address = I2C_SLAVE_ADDRESS;
+static int I2CSlaveModeTrace::_reg = 0;
+static byte I2CSlaveModeTrace::_regbuffer[NUM_REGISTERS];
+static bool I2CSlaveModeTrace::_read_eeprom = false;
+static bool I2CSlaveModeTrace::_use_slave_alt = false;
+static int I2CSlaveModeTrace::_reset_pin = 12;
+static bool I2CSlaveModeTrace::_device_reset = false;
+static uint8_t I2CSlaveModeTrace::_i2c_slave_address = I2C_SLAVE_ADDRESS;
 
-I2CSlaveMode::I2CSlaveMode()
+I2CSlaveModeTrace::I2CSlaveModeTrace()
 {
-  I2CSlaveMode(I2C_SLAVE_ADDRESS);
+  I2CSlaveModeTrace(I2C_SLAVE_ADDRESS);
 }
 
-I2CSlaveMode::I2CSlaveMode(byte address)
+I2CSlaveModeTrace::I2CSlaveModeTrace(byte address)
 {
-  I2CSlaveMode(address, _reset_pin);
+  I2CSlaveModeTrace(address, _reset_pin);
 }
 
-I2CSlaveMode::I2CSlaveMode(uint8_t address, int pin)
+I2CSlaveModeTrace::I2CSlaveModeTrace(uint8_t address, int pin)
 {
   _reset_pin = pin;
   digitalWrite(_reset_pin, HIGH);
@@ -142,18 +143,18 @@ I2CSlaveMode::I2CSlaveMode(uint8_t address, int pin)
   Wire.onRequest(sendEvent);
 }
 
-void I2CSlaveMode::resetIfRequested() 
+void I2CSlaveModeTrace::resetIfRequested() 
 {
   if (_device_reset)
     digitalWrite(_reset_pin, LOW);
 }
 
-const byte I2CSlaveMode::getRegister(byte address)
+const byte I2CSlaveModeTrace::getRegister(byte address)
 {
   return _regbuffer[address];
 }
 
-const byte* I2CSlaveMode::getRange(byte start, byte end)
+const byte* I2CSlaveModeTrace::getRange(byte start, byte end)
 {
   byte buffer[end-start];
   for (byte i = start; i++ ; i<end) {
@@ -162,17 +163,17 @@ const byte* I2CSlaveMode::getRange(byte start, byte end)
   return buffer;
 }
 
-const byte* I2CSlaveMode::getBuffer()
+const byte* I2CSlaveModeTrace::getBuffer()
 {
   return _regbuffer;
 }
 
-void* I2CSlaveMode::bufferChanged(int *ptr)
+void* I2CSlaveModeTrace::bufferChanged(int *ptr)
 {
 
 }
 
-uint8_t I2CSlaveMode::getAddress() 
+uint8_t I2CSlaveModeTrace::getAddress() 
 {
   return _i2c_slave_address;
 }
@@ -180,7 +181,7 @@ uint8_t I2CSlaveMode::getAddress()
 /*
   private methods
 */
-static void I2CSlaveMode::controlUpdated(byte cr) {
+static void I2CSlaveModeTrace::controlUpdated(byte cr) {
   byte cntrl_reg_val = cr;
   byte control_mask = 0x01;
   byte perma_mask = B00001110; // only the respected bits should be stored
@@ -317,14 +318,20 @@ static void I2CSlaveMode::controlUpdated(byte cr) {
 
 }
 
-static void I2CSlaveMode::receiveEvent(int len){
+static void I2CSlaveModeTrace::receiveEvent(int len){
+  TRACE();
+  DUMP(len);
   #ifdef DEBUG
     Serial.print("receiveEvent(int len):");
     Serial.println(len);
     Serial.flush();
   #endif
   if(len == 1){ // One Byte Data received -> Read Request Address
-    _reg = Wire.read();
+    if (Wire.available() > 0) {
+      _reg = Wire.read();
+      DUMP(_reg);
+      TRACE();
+    }
   } else {
     _reg = 0;
     if (Wire.available() > 0){
@@ -347,7 +354,9 @@ static void I2CSlaveMode::receiveEvent(int len){
   }
 }
 
-static byte I2CSlaveMode::readData(int p, bool from_eeprom) {
+static byte I2CSlaveModeTrace::readData(int p, bool from_eeprom) {
+  TRACE();
+  DUMP(p);
   #ifdef DEBUG
     Serial.print("readData(int p, bool from_eeprom):");
     Serial.print(p);  
@@ -366,14 +375,17 @@ static byte I2CSlaveMode::readData(int p, bool from_eeprom) {
   } else {
       c = _regbuffer[p];    //read from local buffer    
   }
+  DUMP(c);
   return c;
 }
 
-static void I2CSlaveMode::sendEvent(){
+static void I2CSlaveModeTrace::sendEvent(){
+  TRACE();
   #ifdef DEBUG
     Serial.println("sendEvent()");
   #endif
   int p = _reg % sizeof(_regbuffer); 
+  DUMP(p);
   byte c;
   //delayMicroseconds(20);
   c = readData(p, _read_eeprom);
